@@ -12,6 +12,16 @@ type Coordinate struct {
 	lon float64
 }
 
+// Latitude returns the coordinate's latitude in decimal degrees.
+func (co Coordinate) Latitude() float64 {
+	return co.lat
+}
+
+// Longitude returns the coordinate's longitude in decimal degrees.
+func (co Coordinate) Longitude() float64 {
+	return co.lon
+}
+
 const (
 	// Earth's mean radius in nautical miles (6371.0088 km / 1.852 km/NM)
 	earthRadiusNM    = 3440.0695
