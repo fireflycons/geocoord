@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 )
 
 // Coordinate represents a geographic position in decimal degrees.
@@ -11,45 +13,6 @@ import (
 type Coordinate struct {
 	lat float64
 	lon float64
-}
-
-// Latitude returns the coordinate's latitude in decimal degrees.
-func (co Coordinate) Latitude() float64 {
-	return co.lat
-}
-
-// Longitude returns the coordinate's longitude in decimal degrees.
-func (co Coordinate) Longitude() float64 {
-	return co.lon
-}
-
-// MarshalJSON encodes the coordinate with "lat" and "lon" fields.
-func (co Coordinate) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Latitude  float64 `json:"lat"`
-		Longitude float64 `json:"lon"`
-	}{Latitude: co.lat, Longitude: co.lon})
-}
-
-// UnmarshalJSON decodes a coordinate and validates its latitude and longitude.
-func (co *Coordinate) UnmarshalJSON(data []byte) error {
-	var value struct {
-		Latitude  *float64 `json:"lat"`
-		Longitude *float64 `json:"lon"`
-	}
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	if value.Latitude == nil || value.Longitude == nil {
-		return fmt.Errorf("coordinate JSON must contain numeric lat and lon fields")
-	}
-
-	coordinate, err := NewCoordinate(*value.Latitude, *value.Longitude)
-	if err != nil {
-		return err
-	}
-	*co = coordinate
-	return nil
 }
 
 const (
@@ -67,6 +30,25 @@ func NewCoordinate(lat, lon float64) (Coordinate, error) {
 		return Coordinate{}, err
 	}
 	return Coordinate{lat: lat, lon: lon}, nil
+}
+
+// NewCoordinateFromString parses a comma-separated latitude and longitude.
+func NewCoordinateFromString(value string) (Coordinate, error) {
+	parts := strings.Split(value, ",")
+	if len(parts) != 2 {
+		return Coordinate{}, fmt.Errorf("coordinate must contain latitude and longitude separated by a comma")
+	}
+
+	lat, err := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
+	if err != nil {
+		return Coordinate{}, err
+	}
+	lon, err := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+	if err != nil {
+		return Coordinate{}, err
+	}
+
+	return NewCoordinate(lat, lon)
 }
 
 // MustNewCoordinate creates a coordinate and panics if either value is out of range.
@@ -135,6 +117,50 @@ func checkLat(lat float64) error {
 	if lat < -90 || lat > 90 {
 		return fmt.Errorf("invalid latitude %f: must be in [-90, 90]", lat)
 	}
+	return nil
+}
+
+// Latitude returns the coordinate's latitude in decimal degrees.
+func (co Coordinate) Latitude() float64 {
+	return co.lat
+}
+
+// Longitude returns the coordinate's longitude in decimal degrees.
+func (co Coordinate) Longitude() float64 {
+	return co.lon
+}
+
+// String returns the coordinate as latitude and longitude separated by a comma.
+func (co Coordinate) String() string {
+	return strconv.FormatFloat(co.lat, 'g', -1, 64) + "," + strconv.FormatFloat(co.lon, 'g', -1, 64)
+}
+
+// MarshalJSON encodes the coordinate with "lat" and "lon" fields.
+func (co Coordinate) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Latitude  float64 `json:"lat"`
+		Longitude float64 `json:"lon"`
+	}{Latitude: co.lat, Longitude: co.lon})
+}
+
+// UnmarshalJSON decodes a coordinate and validates its latitude and longitude.
+func (co *Coordinate) UnmarshalJSON(data []byte) error {
+	var value struct {
+		Latitude  *float64 `json:"lat"`
+		Longitude *float64 `json:"lon"`
+	}
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.Latitude == nil || value.Longitude == nil {
+		return fmt.Errorf("coordinate JSON must contain numeric lat and lon fields")
+	}
+
+	coordinate, err := NewCoordinate(*value.Latitude, *value.Longitude)
+	if err != nil {
+		return err
+	}
+	*co = coordinate
 	return nil
 }
 
