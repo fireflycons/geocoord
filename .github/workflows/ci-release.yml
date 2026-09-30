@@ -1,0 +1,124 @@
+name: CI and Release
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  lint-and-test:
+    name: Lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: latest
+
+      - name: Test
+        run: go test ./...
+
+  release:
+    name: Create release
+    if: github.ref == 'refs/heads/main'
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-main
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Create versioned release
+        id: create-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Avoid creating another version if this workflow run is retried.
+          while IFS= read -r existing_tag; do
+            if [[ -n "$existing_tag" ]] && gh release view "$existing_tag" >/dev/null 2>&1; then
+              echo "Release $existing_tag already exists for this commit."
+              echo "version=$existing_tag" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done <<< "$(git tag --points-at "$GITHUB_SHA")"
+
+          last_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
+          if [[ -n "$last_tag" ]]; then
+            IFS=. read -r major minor patch <<< "${last_tag#v}"
+            version="v${major}.${minor}.$((10#$patch + 1))"
+            commits="$(git log --no-decorate --format='- %h %s' "${last_tag}..${GITHUB_SHA}")"
+          else
+            version="v0.1.0"
+            commits="$(git log --no-decorate --format='- %h %s' "$GITHUB_SHA")"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          if [[ -z "$commits" ]]; then
+            commits="- No commits since the previous release."
+          fi
+
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          {
+            printf '## Changes\n\n'
+            printf '%s\n' "$commits"
+          } > "$notes_file"
+
+          max_attempts=5
+          for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+            if output="$(gh release create "$version" \
+              --target "$GITHUB_SHA" \
+              --title "$version" \
+              --notes-file "$notes_file" 2>&1)"; then
+              printf '%s\n' "$output"
+              exit 0
+            else
+              status=$?
+              printf '%s\n' "$output" >&2
+            fi
+
+            if [[ ! "$output" =~ (^|[^0-9])(502|504)([^0-9]|$) ]]; then
+              exit "$status"
+            fi
+
+            if gh release view "$version" >/dev/null 2>&1; then
+              echo "Release $version exists; treating the retry as successful."
+              exit 0
+            fi
+
+            if (( attempt == max_attempts )); then
+              echo "Release creation failed after $max_attempts attempts." >&2
+              exit "$status"
+            fi
+
+            delay=$((attempt * 5))
+            echo "GitHub returned 502/504; retrying in ${delay}s (attempt $((attempt + 1))/$max_attempts)."
+            sleep "$delay"
+          done
+
+      - name: Request public Go module indexing
+        env:
+          MODULE: github.com/fireflycons/geocoord
+          VERSION: ${{ steps.create-release.outputs.version }}
+        run: GOPROXY=proxy.golang.org go list -m "${MODULE}@${VERSION}"
