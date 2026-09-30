@@ -52,6 +52,68 @@ func TestCoordinateJSONUnmarshalValidation(t *testing.T) {
 	}
 }
 
+func TestNewCoordinateFromString(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		lat   float64
+		lon   float64
+	}{
+		{name: "plain values", input: "51.5,-0.12", lat: 51.5, lon: -0.12},
+		{name: "surrounding whitespace", input: "  51.5 , \t-0.12  ", lat: 51.5, lon: -0.12},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := NewCoordinateFromString(test.input)
+			if err != nil {
+				t.Fatalf("NewCoordinateFromString() error = %v", err)
+			}
+			if got.Latitude() != test.lat || got.Longitude() != test.lon {
+				t.Errorf("NewCoordinateFromString() = (%v, %v), want (%v, %v)", got.Latitude(), got.Longitude(), test.lat, test.lon)
+			}
+		})
+	}
+}
+
+func TestNewCoordinateFromStringErrors(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{name: "missing longitude", input: "51.5"},
+		{name: "extra component", input: "51.5,-0.12,1"},
+		{name: "invalid latitude", input: "north,-0.12"},
+		{name: "invalid longitude", input: "51.5,west"},
+		{name: "latitude out of range", input: "90.1,0"},
+		{name: "longitude out of range", input: "0,180.1"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := NewCoordinateFromString(test.input); err == nil {
+				t.Fatal("NewCoordinateFromString() error = nil, want an error")
+			}
+		})
+	}
+}
+
+func TestCoordinateStringRoundTrip(t *testing.T) {
+	want := MustNewCoordinate(51.5, -0.12)
+	var stringer interface{ String() string } = want
+	if got, expected := stringer.String(), "51.5,-0.12"; got != expected {
+		t.Fatalf("String() = %q, want %q", got, expected)
+	}
+
+	got, err := NewCoordinateFromString(want.String())
+	if err != nil {
+		t.Fatalf("NewCoordinateFromString(String()) error = %v", err)
+	}
+	if got.Latitude() != want.Latitude() || got.Longitude() != want.Longitude() {
+		t.Errorf("round trip = (%v, %v), want (%v, %v)", got.Latitude(), got.Longitude(), want.Latitude(), want.Longitude())
+	}
+}
+
 func TestCoordinateDistanceTo(t *testing.T) {
 	tests := []struct {
 		name string
