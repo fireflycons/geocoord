@@ -12,7 +12,7 @@ degrees clockwise from north, normalized to `[0, 360)`.
 ## Install
 
 ```sh
-go get github.com/fireflycons/gocoord
+go get github.com/fireflycons/geocoord
 ```
 
 ## Examples
@@ -29,7 +29,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/fireflycons/gocoord"
+	"github.com/fireflycons/geocoord"
 )
 
 func main() {
@@ -59,7 +59,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/fireflycons/gocoord"
+	"github.com/fireflycons/geocoord"
 )
 
 func main() {
