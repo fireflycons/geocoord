@@ -1,6 +1,7 @@
 package geocoord
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 )
@@ -20,6 +21,35 @@ func (co Coordinate) Latitude() float64 {
 // Longitude returns the coordinate's longitude in decimal degrees.
 func (co Coordinate) Longitude() float64 {
 	return co.lon
+}
+
+// MarshalJSON encodes the coordinate with "lat" and "lon" fields.
+func (co Coordinate) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Latitude  float64 `json:"lat"`
+		Longitude float64 `json:"lon"`
+	}{Latitude: co.lat, Longitude: co.lon})
+}
+
+// UnmarshalJSON decodes a coordinate and validates its latitude and longitude.
+func (co *Coordinate) UnmarshalJSON(data []byte) error {
+	var value struct {
+		Latitude  *float64 `json:"lat"`
+		Longitude *float64 `json:"lon"`
+	}
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.Latitude == nil || value.Longitude == nil {
+		return fmt.Errorf("coordinate JSON must contain numeric lat and lon fields")
+	}
+
+	coordinate, err := NewCoordinate(*value.Latitude, *value.Longitude)
+	if err != nil {
+		return err
+	}
+	*co = coordinate
+	return nil
 }
 
 const (
