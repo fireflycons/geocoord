@@ -1,9 +1,56 @@
 package geocoord
 
 import (
+	"encoding/json"
 	"math"
 	"testing"
 )
+
+func TestCoordinateJSONRoundTrip(t *testing.T) {
+	want := MustNewCoordinate(51.5, -0.12)
+
+	data, err := json.Marshal(want)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	if got, expected := string(data), `{"lat":51.5,"lon":-0.12}`; got != expected {
+		t.Fatalf("Marshal() = %s, want %s", got, expected)
+	}
+
+	var got Coordinate
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if got.Latitude() != want.Latitude() || got.Longitude() != want.Longitude() {
+		t.Errorf("Unmarshal() = (%v, %v), want (%v, %v)", got.Latitude(), got.Longitude(), want.Latitude(), want.Longitude())
+	}
+}
+
+func TestCoordinateJSONUnmarshalValidation(t *testing.T) {
+	tests := []struct {
+		name string
+		json string
+	}{
+		{name: "latitude out of range", json: `{"lat":90.1,"lon":0}`},
+		{name: "longitude out of range", json: `{"lat":0,"lon":180.1}`},
+		{name: "missing latitude", json: `{"lon":0}`},
+		{name: "missing longitude", json: `{"lat":0}`},
+		{name: "null latitude", json: `{"lat":null,"lon":0}`},
+		{name: "non-numeric latitude", json: `{"lat":"0","lon":0}`},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			coordinate := MustNewCoordinate(12, 34)
+			if err := json.Unmarshal([]byte(test.json), &coordinate); err == nil {
+				t.Fatal("Unmarshal() error = nil, want an error")
+			}
+			if coordinate.Latitude() != 12 || coordinate.Longitude() != 34 {
+				t.Errorf("coordinate changed after failed Unmarshal(): (%v, %v)", coordinate.Latitude(), coordinate.Longitude())
+			}
+		})
+	}
+}
 
 func TestCoordinateDistanceTo(t *testing.T) {
 	tests := []struct {
